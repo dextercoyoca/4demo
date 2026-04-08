@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,15 +6,24 @@ import {
   Image,
   TouchableOpacity,
   TextInput,
-  Alert,
+  ScrollView,
+  Animated,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
+import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import { showClientAlert } from '../utils/showClientAlert';
 
-export default function Dashboard({ colors }) {
+export default function Dashboard({ colors, apiBaseUrl, user, isActive, onScroll, onLogout, onUserRefresh }) {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [activeFaq, setActiveFaq] = useState(null);
   const [profile, setProfile] = useState({
     name: '',
     email: '',
@@ -22,49 +31,94 @@ export default function Dashboard({ colors }) {
     contact: '',
     avatar: 'https://www.pngmart.com/files/23/Profile-PNG-Photo.png',
   });
+  const faqItems = [
+    {
+      id: 'faq-1',
+      question: 'How do I know if my payment was received?',
+      answer: 'After submitting your receipt, refresh your payment status. Once verified, your bill status changes to Paid or Completed.',
+    },
+    {
+      id: 'faq-2',
+      question: 'What should I do if I forgot my password?',
+      answer: 'Use the Forgot Password option in the login modal, provide your account details, then set your new password.',
+    },
+    {
+      id: 'faq-3',
+      question: 'Can I update my profile information?',
+      answer: 'Yes. Open Profile, tap the edit icon, update your details, then tap Save at the bottom.',
+    },
+    {
+      id: 'faq-4',
+      question: 'Who do I contact during an electrical emergency?',
+      answer: 'Go to the Maintenance tab for emergency hotlines and available utility personnel contacts.',
+    },
+  ];
+  const getGlassContainerStyle = () => {
+    const darkMode = colors.mode === 'dark';
 
-  // Fetch profile data from MongoDB
+    return {
+      backgroundColor: darkMode ? 'rgba(15, 23, 42, 0.4)' : 'rgba(255, 255, 255, 0.62)',
+      borderColor: darkMode ? 'rgba(148, 163, 184, 0.35)' : 'rgba(255, 255, 255, 0.74)',
+      ...(Platform.OS === 'web'
+        ? {
+            backdropFilter: 'blur(14px) saturate(135%)',
+            WebkitBackdropFilter: 'blur(14px) saturate(135%)',
+          }
+        : {}),
+    };
+  };
+
+  const mapUserToProfile = (userData) => ({
+    name: userData.name || userData.username || '',
+    email: userData.email || '',
+    address: userData.address || userData.Address || '',
+    contact: userData.contact || userData.contactNumber || '',
+    avatar:
+      userData.avatar ||
+      userData.profilePic ||
+      'https://www.pngmart.com/files/23/Profile-PNG-Photo.png',
+  });
+
+  const isInvalidApiPayload = (payload) =>
+    typeof payload === 'string' &&
+    (payload.startsWith('Tunnel') || payload.includes('ngrok') || payload.startsWith('<!DOCTYPE') || payload.startsWith('<html'));
+
+  const apiHeaders = { headers: { 'ngrok-skip-browser-warning': 'true' } };
+
   useEffect(() => {
+    if (!apiBaseUrl || !user?._id) {
+      setLoading(false);
+      return;
+    }
+
     const fetchProfile = async () => {
       try {
-        // Assuming user ID is hardcoded for demo; in real app, get from auth
-        const userId = '69c9f585c466a662470a6543'; // Example ObjectId
-        const response = await axios.get(`http://10.174.223.169:5000/users/${userId}`);
-        const userData = response.data;
-        setProfile({
-          name: userData.name || '',
-          email: userData.email || '',
-          address: userData.address || '',
-          contact: userData.contact || '',
-          avatar: userData.avatar || 'https://www.pngmart.com/files/23/Profile-PNG-Photo.png',
-        });
+        const response = await axios.get(`${apiBaseUrl}/users/${user._id}`, apiHeaders);
+        if (isInvalidApiPayload(response.data)) {
+          throw new Error('Tunnel is inactive or API URL is stale. Start a fresh tunnel and reload the app.');
+        }
+        setProfile(mapUserToProfile(response.data));
       } catch (error) {
         console.error('Error fetching profile:', error);
-        Alert.alert('Error', 'Failed to load profile data');
+        showClientAlert('Error', error?.message || 'Failed to load profile data');
       } finally {
         setLoading(false);
       }
     };
 
     fetchProfile();
-  }, []);
+  }, [apiBaseUrl, user?._id]);
 
-  const billAmount = 2450;
-  const dueDate = 'March 7, 2026';
-  const accountNumber = 'ACC-2024-987654';
-  const status = 'Active';
-
-  // 📸 Pick image from gallery
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert('Permission required', 'Allow access to gallery');
+      showClientAlert('Permission required', 'Allow access to gallery');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
@@ -79,260 +133,366 @@ export default function Dashboard({ colors }) {
   };
 
   const handleSave = async () => {
+    if (!apiBaseUrl || !user?._id) {
+      showClientAlert('Error', 'No user is logged in');
+      return;
+    }
+
     try {
-      const userId = '69c9f585c466a662470a6543'; // Example ObjectId
-      await axios.put(`http://10.174.223.169:5000/users/${userId}`, profile);
+      await axios.put(`${apiBaseUrl}/users/${user._id}`, profile, apiHeaders);
+      onUserRefresh?.(profile);
       setIsEditing(false);
-      Alert.alert('Saved', 'Profile updated successfully!');
+      showClientAlert('Saved', 'Profile updated successfully!');
     } catch (error) {
       console.error('Error saving profile:', error);
-      Alert.alert('Error', 'Failed to save profile');
+      showClientAlert('Error', 'Failed to save profile');
     }
   };
 
-  const handleCancel = () => {
-    setIsEditing(false);
+  const handleChangePassword = async () => {
+    if (!apiBaseUrl || !user?._id) {
+      showClientAlert('Error', 'No user is logged in');
+      return;
+    }
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      showClientAlert('Error', 'Please complete the password form');
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      showClientAlert('Error', 'New password confirmation does not match');
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${apiBaseUrl}/users/${user._id}/change-password`, {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      }, apiHeaders);
+      showClientAlert('Success', response.data.message);
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (error) {
+      console.error('Error changing password:', error);
+      showClientAlert('Error', error.response?.data?.message || 'Failed to change password');
+    }
   };
 
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setPasswordForm({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={{ color: colors.darkBg }}>Loading profile...</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <Text style={{ color: colors.darkBg }}>Loading profile...</Text>
-        </View>
-      ) : (
-        <>
-          {/* PROFILE CARD */}
-          <View style={[styles.profileCard, { backgroundColor: colors.primary }]}>
-            <View style={styles.profileHeader}>
-              <Text style={[styles.profileTitle, { color: colors.darkBg }]}>
-                Profile
-              </Text>
+    <Animated.ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+      bounces={false}
+      alwaysBounceVertical={false}
+      overScrollMode="never"
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+    >
+      <View style={[styles.mainContainer, getGlassContainerStyle()]}>
+        <View style={styles.sectionBlock}>
+          <View style={styles.profileHeader}>
+            <Text style={[styles.profileTitle, { color: colors.text }]}>Profile</Text>
 
-              {!isEditing ? (
-                <TouchableOpacity onPress={() => setIsEditing(true)}>
-                  <Text style={[styles.editButton, { color: colors.accent }]}>
-                    Edit
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.editButtons}>
-                  <TouchableOpacity onPress={handleCancel}>
-                    <Text style={[styles.cancelButton, { color: colors.darkBg }]}>
-                      Cancel
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={handleSave}>
-                    <Text style={[styles.saveButton, { color: colors.accent }]}>
-                      Save
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            {/* AVATAR */}
-            <View style={styles.avatarContainer}>
-              <TouchableOpacity onPress={isEditing ? pickImage : null}>
-                <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            {!isEditing ? (
+              <TouchableOpacity style={styles.iconActionButton} onPress={() => setIsEditing(true)}>
+                <FontAwesome name="ellipsis" size={24} color={colors.accent} />
               </TouchableOpacity>
-
-              {isEditing && (
-                <Text style={{ fontSize: 12, color: colors.darkBg, marginTop: 6 }}>
-                  Tap image to change
-                </Text>
-              )}
-            </View>
-
-            {/* PROFILE FIELDS */}
-            <View style={styles.profileContent}>
-              {/* NAME */}
-              <View style={styles.profileField}>
-                <Text style={[styles.fieldLabel, { color: colors.darkBg }]}>
-                  Name:
-                </Text>
-                {isEditing ? (
-                  <TextInput
-                    style={[styles.input, { borderColor: colors.primary }]}
-                    value={profile.name}
-                    onChangeText={(text) =>
-                      setProfile({ ...profile, name: text })
-                    }
-                  />
-                ) : (
-                  <Text style={[styles.fieldValue, { color: colors.darkBg }]}>
-                    {profile.name}
-                  </Text>
-                )}
+            ) : (
+              <View style={styles.editButtons}>
+                <TouchableOpacity style={styles.iconActionButton} onPress={handleCancelEdit}>
+                  <FontAwesome name="xmark" size={24} color={colors.mutedText} />
+                </TouchableOpacity>
               </View>
-
-              {/* EMAIL */}
-              <View style={styles.profileField}>
-                <Text style={[styles.fieldLabel, { color: colors.darkBg }]}>
-                  Email:
-                </Text>
-                {isEditing ? (
-                  <TextInput
-                    style={[styles.input, { borderColor: colors.primary }]}
-                    value={profile.email}
-                    onChangeText={(text) =>
-                      setProfile({ ...profile, email: text })
-                    }
-                  />
-                ) : (
-                  <Text style={[styles.fieldValue, { color: colors.darkBg }]}>
-                    {profile.email}
-                  </Text>
-                )}
-              </View>
-
-              {/* ADDRESS */}
-              <View style={styles.profileField}>
-                <Text style={[styles.fieldLabel, { color: colors.darkBg }]}>
-                  Address:
-                </Text>
-                {isEditing ? (
-                  <TextInput
-                    style={[styles.input, { borderColor: colors.primary }]}
-                    value={profile.address}
-                    onChangeText={(text) =>
-                      setProfile({ ...profile, address: text })
-                    }
-                  />
-                ) : (
-                  <Text style={[styles.fieldValue, { color: colors.darkBg }]}>
-                    {profile.address}
-                  </Text>
-                )}
-              </View>
-
-              {/* CONTACT */}
-              <View style={styles.profileField}>
-                <Text style={[styles.fieldLabel, { color: colors.darkBg }]}>
-                  Contact:
-                </Text>
-                {isEditing ? (
-                  <TextInput
-                    style={[styles.input, { borderColor: colors.primary }]}
-                    value={profile.contact}
-                    onChangeText={(text) =>
-                      setProfile({ ...profile, contact: text })
-                    }
-                    keyboardType="phone-pad"
-                  />
-                ) : (
-                  <Text style={[styles.fieldValue, { color: colors.darkBg }]}>
-                    {profile.contact}
-                  </Text>
-                )}
-              </View>
-            </View>
+            )}
           </View>
 
-          {/* STATUS */}
-          <View style={[styles.statusCard, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.statusLabel, { color: colors.darkBg }]}>
-              Account Status
-            </Text>
-            <Text style={[styles.statusValue, { color: colors.accent }]}>
-              {status}
-            </Text>
+          <View style={styles.avatarContainer}>
+            <TouchableOpacity onPress={isEditing ? pickImage : null}>
+              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            </TouchableOpacity>
+            {isEditing && (
+              <Text style={{ fontSize: 12, color: colors.mutedText, marginTop: 6 }}>
+                Tap image to change
+              </Text>
+            )}
           </View>
 
-          {/* BILL */}
-          <View style={[styles.billCard, { backgroundColor: colors.darkBlue }]}>
-            <Text style={[styles.label, { color: colors.white }]}>
-              Current Bill
-            </Text>
-            <Text style={[styles.amount, { color: colors.accent }]}>
-              ₱{billAmount}
-            </Text>
-            <Text style={[styles.dueDateText, { color: colors.white }]}>
-              Due by: {dueDate}
-            </Text>
+          <View style={styles.profileField}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedText }]}>Name:</Text>
+            {isEditing ? (
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                value={profile.name}
+                placeholderTextColor={colors.mutedText}
+                onChangeText={(text) => setProfile({ ...profile, name: text })}
+              />
+            ) : (
+              <Text style={[styles.fieldValue, { color: colors.text }]}>{profile.name}</Text>
+            )}
           </View>
 
-          {/* DETAILS */}
-          <View style={[styles.detailsCard, { backgroundColor: colors.primary }]}>
-            <Text style={{ color: colors.darkBg }}>
-              Account #: {accountNumber}
-            </Text>
+          <View style={styles.profileField}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedText }]}>Email:</Text>
+            {isEditing ? (
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                value={profile.email}
+                placeholderTextColor={colors.mutedText}
+                onChangeText={(text) => setProfile({ ...profile, email: text })}
+              />
+            ) : (
+              <Text style={[styles.fieldValue, { color: colors.text }]}>{profile.email}</Text>
+            )}
           </View>
-        </>
-      )}
-    </View>
+
+          <View style={styles.profileField}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedText }]}>Address:</Text>
+            {isEditing ? (
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                value={profile.address}
+                placeholderTextColor={colors.mutedText}
+                onChangeText={(text) => setProfile({ ...profile, address: text })}
+              />
+            ) : (
+              <Text style={[styles.fieldValue, { color: colors.text }]}>{profile.address}</Text>
+            )}
+          </View>
+
+          <View style={styles.profileField}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedText }]}>Contact:</Text>
+            {isEditing ? (
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                value={profile.contact}
+                placeholderTextColor={colors.mutedText}
+                onChangeText={(text) => setProfile({ ...profile, contact: text })}
+                keyboardType="phone-pad"
+              />
+            ) : (
+              <Text style={[styles.fieldValue, { color: colors.text }]}>{profile.contact}</Text>
+            )}
+          </View>
+
+          {isEditing && (
+            <>
+              <View style={styles.passwordForm}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Change Password</Text>
+                <TextInput
+                  style={[styles.passwordInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                  placeholder="Current Password"
+                  placeholderTextColor={colors.mutedText}
+                  secureTextEntry
+                  value={passwordForm.currentPassword}
+                  onChangeText={(text) => setPasswordForm({ ...passwordForm, currentPassword: text })}
+                />
+                <TextInput
+                  style={[styles.passwordInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                  placeholder="New Password"
+                  placeholderTextColor={colors.mutedText}
+                  secureTextEntry
+                  value={passwordForm.newPassword}
+                  onChangeText={(text) => setPasswordForm({ ...passwordForm, newPassword: text })}
+                />
+                <TextInput
+                  style={[styles.passwordInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+                  placeholder="Confirm New Password"
+                  placeholderTextColor={colors.mutedText}
+                  secureTextEntry
+                  value={passwordForm.confirmPassword}
+                  onChangeText={(text) => setPasswordForm({ ...passwordForm, confirmPassword: text })}
+                />
+                <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.accent }]} onPress={handleChangePassword}>
+                  <Text style={{ color: colors.darkBg, fontWeight: 'bold' }}>Update Password</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.saveBottomButton, { backgroundColor: colors.accent }]}
+                onPress={handleSave}
+              >
+                <FontAwesome
+                  name="check"
+                  size={18}
+                  color={colors.mode === 'dark' ? '#0b1020' : '#ffffff'}
+                />
+                <Text style={[styles.saveBottomButtonText, { color: colors.mode === 'dark' ? '#0b1020' : '#ffffff' }]}>
+                  Save
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.sectionBlock}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Account Session</Text>
+          <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.darkBlue }]} onPress={onLogout}>
+            <Text style={{ color: colors.white, fontWeight: 'bold' }}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.sectionBlock}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>FAQ</Text>
+          {faqItems.map((item) => {
+            const expanded = activeFaq === item.id;
+            return (
+              <View key={item.id} style={[styles.faqItem, { borderColor: colors.border, backgroundColor: colors.inputBg }]}>
+                <TouchableOpacity
+                  style={styles.faqHeader}
+                  onPress={() => setActiveFaq((current) => (current === item.id ? null : item.id))}
+                >
+                  <Text style={[styles.faqQuestion, { color: colors.text }]}>{item.question}</Text>
+                  <Text style={[styles.faqToggle, { color: colors.mutedText }]}>{expanded ? '-' : '+'}</Text>
+                </TouchableOpacity>
+                {expanded && (
+                  <Text style={[styles.faqAnswer, { color: colors.mutedText }]}>{item.answer}</Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    </Animated.ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingBottom: 20 },
-
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  profileCard: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+  mainContainer: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 20,
+    backgroundColor: 'rgba(17, 29, 51, 0.4)',
+    backdropFilter: 'blur(10px)',
+    borderColor: 'rgba(148, 163, 184, 0.2)',
   },
-
+  sectionBlock: {
+    width: '100%',
+  },
   profileHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-
-  profileTitle: { fontSize: 18, fontWeight: 'bold' },
-
-  editButtons: { flexDirection: 'row', gap: 10 },
-
+  profileTitle: { fontSize: 20, fontWeight: '800' },
+  editButtons: { flexDirection: 'row' },
+  iconActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatarContainer: { alignItems: 'center', marginBottom: 12 },
-
   avatar: { width: 100, height: 100, borderRadius: 50 },
-
-  profileContent: { gap: 10 },
-
-  profileField: { flexDirection: 'row', alignItems: 'center' },
-
-  fieldLabel: { width: 70, fontWeight: '600' },
-
+  profileField: { marginBottom: 12 },
+  fieldLabel: { fontWeight: '600', marginBottom: 4 },
   fieldValue: { flex: 1 },
-
   input: {
     borderWidth: 1,
-    borderRadius: 5,
-    padding: 6,
+    borderRadius: 10,
+    padding: 10,
     flex: 1,
   },
-
-  statusCard: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(11, 30, 46, 0.15)',
+    marginVertical: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  actionButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 8,
     alignItems: 'center',
+    marginTop: 10,
   },
-
-  statusLabel: { fontSize: 12 },
-
-  statusValue: { fontSize: 20, fontWeight: 'bold' },
-
-  billCard: {
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 16,
+  passwordForm: {
+    marginTop: 8,
+    marginBottom: 10,
   },
-
-  label: { fontSize: 14 },
-
-  amount: { fontSize: 32, fontWeight: 'bold' },
-
-  dueDateText: { fontSize: 12 },
-
-  detailsCard: {
-    padding: 16,
-    borderRadius: 12,
+  passwordInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  saveBottomButton: {
+    marginTop: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  saveBottomButtonText: {
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  faqItem: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  faqHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  faqQuestion: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  faqToggle: {
+    fontSize: 18,
+    fontWeight: '700',
+    minWidth: 14,
+    textAlign: 'center',
+  },
+  faqAnswer: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 18,
   },
 });
