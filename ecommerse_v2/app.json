@@ -16,6 +16,9 @@
       },
       "package": "com.yourname.ecommersev2"
     },
-    "userInterfaceStyle": "automatic"
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "favicon": "./assets/Electripay-final-logo.png"
+    }
   }
 }
