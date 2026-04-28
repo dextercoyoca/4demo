@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import { FontAwesome6 as FontAwesome } from '@expo/vector-icons';
 import { showClientAlert } from '../utils/showClientAlert';
 
 export default function Dashboard({ colors, apiBaseUrl, user, isActive, onScroll, onLogout, onUserRefresh }) {
@@ -394,7 +394,6 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 20,
     backgroundColor: 'rgba(17, 29, 51, 0.4)',
-    backdropFilter: 'blur(10px)',
     borderColor: 'rgba(148, 163, 184, 0.2)',
   },
   sectionBlock: {

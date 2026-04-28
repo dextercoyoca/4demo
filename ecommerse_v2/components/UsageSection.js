@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Animated, Platform } from 'react-native';
 import axios from 'axios';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import { FontAwesome6 as FontAwesome } from '@expo/vector-icons';
 
 export default function UsageSection({ colors, apiBaseUrl, user, isActive, onScroll }) {
   const [usageData, setUsageData] = useState(null);
@@ -273,7 +273,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     backgroundColor: 'rgba(17, 29, 51, 0.4)',
-    backdropFilter: 'blur(10px)',
     borderColor: 'rgba(148, 163, 184, 0.2)',
   },
   chartCard: {

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Linking, Platform } from 'react-native';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import { FontAwesome6 as FontAwesome } from '@expo/vector-icons';
 import { showClientAlert } from '../utils/showClientAlert';
 
 export default function MaintenanceSection({ colors }) {

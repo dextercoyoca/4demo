@@ -22,12 +22,12 @@ import CompanyInfo from './components/CompanyInfo';
 import MaintenanceSection from './components/MaintenanceSection';
 import Navbar from './components/Navbar';
 import { useFonts } from 'expo-font';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import { FontAwesome6 as FontAwesome } from '@expo/vector-icons';
 import { showClientAlert } from './utils/showClientAlert';
 
 // Import background image for web
-const backgroundImageUri = require('./assets/electripay-bg.jpg');
-const backgroundImageLightUri = require('./assets/electripay-bckgrd.png');
+const backgroundImageUri = require('./assets/Nigth_bg.jpg');
+const backgroundImageLightUri = require('./assets/day_bg.png');
 
 const IS_WEB = Platform.OS === 'web';
 
@@ -36,7 +36,7 @@ const API_CONFIG = {
   tunnel: process.env.EXPO_PUBLIC_NGROK_URL || 'https://your-ngrok-url.ngrok.io',
   // Local development URLs
   local: 'http://localhost:5000',
-  machineIP: 'http://10.0.78.46:5000',  // For phones on same network
+  machineIP: 'http://172.16.198.72:5000',  // For phones on same network
   localAndroid: 'http://10.0.2.2:5000',
 };
 
@@ -140,8 +140,8 @@ const emptyForgotForm = {
 };
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
-    ElectroFont1: require('./assets/fonts/Electric-Formula.ttf'),
+  const [fontsLoaded, fontError] = useFonts({
+    Electrifont1: require('./assets/fonts/Electric-Formula.ttf'),
     ElectroFont2: require('./assets/fonts/Roboc.otf'),
   });
   const [activeTab, setActiveTab] = useState('company');
@@ -165,6 +165,10 @@ export default function App() {
   const [themeMode, setThemeMode] = useState('dark');
   const [webMenuOpen, setWebMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [adminNotifications, setAdminNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState('');
   const tabIndicatorAnim = useRef(new Animated.Value(0)).current;
   const modalTranslateY = useRef(new Animated.Value(70)).current;
   const modalOpacity = useRef(new Animated.Value(0)).current;
@@ -175,9 +179,14 @@ export default function App() {
   const backgroundFadeAnim = useRef(new Animated.Value(themeMode === 'light' ? 1 : 0)).current;
   const pagerRef = useRef(null);
   const colors = THEMES[themeMode];
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isWeb = IS_WEB;
   const isLaptopWeb = isWeb && screenWidth >= 1024;
+  const isCompactWebModal = isWeb && (screenWidth < 768 || screenHeight < 820);
+  const modalHorizontalPadding = isWeb ? (screenWidth < 480 ? 12 : screenWidth < 768 ? 20 : 24) : 16;
+  const modalVerticalPadding = isWeb ? (screenHeight < 720 ? 12 : 24) : 16;
+  const modalCardMaxHeight = Math.max(320, screenHeight - (modalVerticalPadding * 2));
+  const isFontReady = IS_WEB || fontsLoaded || !!fontError;
 
   const tabs = ['company', 'payment', 'dashboard', 'profile', 'maintenance'];
   const tabWidth = screenWidth / tabs.length;
@@ -410,7 +419,13 @@ export default function App() {
     ]).start();
   }, [activeTab, isLoggedIn, isWeb, webContentOpacity, webContentTranslateY]);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    if (fontError) {
+      console.error('Custom fonts failed to load:', fontError);
+    }
+  }, [fontError]);
+
+  if (!isFontReady) {
     return null;
   }
 
@@ -578,6 +593,9 @@ export default function App() {
     setCurrentUser(null);
     setIsLoggedIn(false);
     setShowLoginModal(!isWeb);
+    setShowNotificationsModal(false);
+    setAdminNotifications([]);
+    setNotificationsError('');
     setActiveTab('company');
     setWebMenuOpen(false);
     switchAuthMode('login');
@@ -589,6 +607,73 @@ export default function App() {
     switchAuthMode(mode);
     setShowLoginModal(true);
   };
+  const loadAdminNotifications = async (forceRefresh = false) => {
+    if (!isLoggedIn || !currentUser?._id) {
+      return;
+    }
+
+    if (!forceRefresh && notificationsLoading) {
+      return;
+    }
+
+    const resolvedApiUrl = apiUrl || await resolveApiUrl();
+    if (!resolvedApiUrl) {
+      setNotificationsError('Notification server is not reachable right now.');
+      return;
+    }
+
+    try {
+      setNotificationsLoading(true);
+      setNotificationsError('');
+
+      const query = `userId=${encodeURIComponent(String(currentUser._id))}`;
+      const res = await fetch(`${resolvedApiUrl}/notifications?${query}`, {
+        headers: NGROK_HEADERS,
+      });
+      const data = await parseApiResponse(res);
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to load notifications');
+      }
+
+      setAdminNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+    } catch (error) {
+      setNotificationsError(error.message || 'Failed to load notifications');
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+  const openNotificationsModal = async () => {
+    setShowNotificationsModal(true);
+    await loadAdminNotifications(true);
+  };
+  const formatNotificationDate = (value) => {
+    if (!value) {
+      return 'Recently';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return 'Recently';
+    }
+
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn || !currentUser?._id) {
+      return;
+    }
+
+    loadAdminNotifications();
+  }, [isLoggedIn, currentUser?._id]);
+
   const renderThemeSwitch = () => (
     <TouchableOpacity
       onPress={toggleTheme}
@@ -921,7 +1006,16 @@ export default function App() {
         />
       </View>
       <Modal visible={showLoginModal && !isLoggedIn} transparent animationType="fade">
-        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              backgroundColor: colors.overlay,
+              paddingHorizontal: modalHorizontalPadding,
+              paddingVertical: modalVerticalPadding,
+            },
+          ]}
+        >
           <View
             style={[
               styles.modalBackdropHalo,
@@ -980,15 +1074,15 @@ export default function App() {
             style={[
               styles.modalCard,
               isWeb && styles.modalCardWeb,
+              isCompactWebModal && styles.modalCardCompact,
               {
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
                 opacity: modalOpacity,
                 transform: [{ translateY: modalTranslateY }],
-                width: isWeb && screenWidth < 480 ? '90%' : undefined,
-                paddingHorizontal: isWeb && screenWidth < 480 ? 20 : undefined,
-                paddingVertical: isWeb && screenWidth < 480 ? 20 : undefined,
-                maxHeight: isWeb && screenWidth < 480 ? '90vh' : undefined,
+                width: '100%',
+                maxWidth: isWeb ? Math.min(520, screenWidth - (modalHorizontalPadding * 2)) : undefined,
+                maxHeight: modalCardMaxHeight,
                 overflow: 'hidden',
               },
             ]}
@@ -1012,10 +1106,10 @@ export default function App() {
                 Sign in to manage bills, monitor energy usage, and keep payment activity in one dashboard.
               </Text>
             )}
-            {isWeb && screenWidth < 480 ? (
+            {isWeb ? (
               <ScrollView
                 style={styles.modalScrollContent}
-                contentContainerStyle={{ paddingHorizontal: 4, width: '100%' }}
+                contentContainerStyle={styles.modalScrollContentContainer}
                 showsVerticalScrollIndicator={false}
                 bounces={false}
               >
@@ -1067,6 +1161,68 @@ export default function App() {
         </View>
       </Modal>
 
+      <Modal visible={showNotificationsModal} transparent animationType="fade">
+        <View style={[styles.notificationsOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.notificationsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.notificationsHeader}>
+              <View style={styles.notificationsTitleWrap}>
+                <Text style={[styles.notificationsTitle, { color: colors.text }]}>Admin Notifications</Text>
+                <Text style={[styles.notificationsSubtitle, { color: colors.mutedText }]}>
+                  Updates and reminders sent by admin.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowNotificationsModal(false)}
+                style={[styles.notificationsCloseButton, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+              >
+                <FontAwesome name="xmark" size={18} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => loadAdminNotifications(true)}
+              style={[styles.notificationsRefreshButton, { borderColor: colors.border, backgroundColor: colors.inputBg }]}
+            >
+              <FontAwesome name="arrows-rotate" size={14} color={colors.darkBlue} />
+              <Text style={[styles.notificationsRefreshText, { color: colors.darkBlue }]}>Refresh</Text>
+            </TouchableOpacity>
+
+            <ScrollView style={styles.notificationsList} contentContainerStyle={styles.notificationsListContent}>
+              {notificationsLoading ? (
+                <Text style={[styles.notificationsStateText, { color: colors.mutedText }]}>
+                  Loading notifications...
+                </Text>
+              ) : notificationsError ? (
+                <Text style={[styles.notificationsStateText, { color: colors.danger }]}>
+                  {notificationsError}
+                </Text>
+              ) : adminNotifications.length === 0 ? (
+                <Text style={[styles.notificationsStateText, { color: colors.mutedText }]}>
+                  No admin notifications yet.
+                </Text>
+              ) : (
+                adminNotifications.map((notification) => (
+                  <View
+                    key={notification.id}
+                    style={[styles.notificationItem, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.notificationItemTitle, { color: colors.text }]}>
+                      {notification.title || 'Admin Update'}
+                    </Text>
+                    <Text style={[styles.notificationItemMessage, { color: colors.mutedText }]}>
+                      {notification.message || notification.body || 'No message content available.'}
+                    </Text>
+                    <Text style={[styles.notificationItemMeta, { color: colors.darkBlue }]}>
+                      {formatNotificationDate(notification.createdAt || notification.sentAt || notification.date)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {isWeb ? (
         <>
           <Navbar
@@ -1081,6 +1237,8 @@ export default function App() {
             themeMode={themeMode}
             isMobileMenuOpen={mobileMenuOpen}
             onToggleMobileMenu={setMobileMenuOpen}
+            onOpenNotifications={openNotificationsModal}
+            notificationCount={adminNotifications.length}
           />
           <ScrollView
             style={[styles.mainContent]}
@@ -1138,7 +1296,7 @@ export default function App() {
                             ? screenWidth < 480
                               ? 'Maintenance hotline and emergency reporting'
                               : 'Maintenance hotline and emergency reporting'
-                            : 'Profile and account controls'}
+                        : 'Profile and account controls'}
                     </Text>
                   </View>
                 </View>
@@ -1180,6 +1338,8 @@ export default function App() {
             themeMode={themeMode}
             isMobileMenuOpen={mobileMenuOpen}
             onToggleMobileMenu={setMobileMenuOpen}
+            onOpenNotifications={openNotificationsModal}
+            notificationCount={adminNotifications.length}
           />
           <View style={styles.pagerContainer}>
             <ScrollView
@@ -1349,6 +1509,7 @@ const styles = StyleSheet.create({
     display: 'none',
   },
   headerTitle: {
+    fontFamily: 'Electrifont1',
     display: 'none',
   },
   headerSubtitle: {
@@ -1485,7 +1646,6 @@ const styles = StyleSheet.create({
     gap: 28,
     overflow: 'hidden',
     backgroundColor: 'rgba(17, 29, 51, 0.45)',
-    backdropFilter: 'blur(10px)',
     borderColor: 'rgba(148, 163, 184, 0.25)',
   },
   webHeroCopy: {
@@ -1500,6 +1660,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   webTitle: {
+    fontFamily: 'Electrifont1',
     fontSize: 38,
     lineHeight: 46,
     fontWeight: '800',
@@ -1578,7 +1739,6 @@ const styles = StyleSheet.create({
     marginTop: 32,
     marginBottom: 32,
     backgroundColor: 'rgba(17, 29, 51, 0.2)',
-    backdropFilter: 'blur(15px)',
     borderColor: 'rgba(148, 163, 184, 0.35)',
   },
   webSimpleHeroText: {
@@ -1691,7 +1851,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 26,
     backgroundColor: 'rgba(17, 29, 51, 0.2)',
-    backdropFilter: 'blur(15px)',
     borderColor: 'rgba(148, 163, 184, 0.35)',
   },
   modalOverlay: {
@@ -1782,6 +1941,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 18,
     borderWidth: 1,
+    maxHeight: '92%',
   },
   modalCardWeb: {
     width: '100%',
@@ -1794,9 +1954,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 30,
     backgroundColor: 'rgba(17, 29, 51, 0.25)',
-    backdropFilter: 'blur(15px)',
     borderWidth: 1,
     borderColor: 'rgba(148, 163, 184, 0.4)',
+  },
+  modalCardCompact: {
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    borderRadius: 22,
   },
   modalCloseButton: {
     alignSelf: 'flex-end',
@@ -1824,7 +1988,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     textAlign: 'center',
     marginBottom: 20,
-    fontFamily: 'ElectroFont1',
+    fontFamily: 'Electrifont1',
   },
   modalTitleWeb: {
     fontSize: 34,
@@ -1838,9 +2002,15 @@ const styles = StyleSheet.create({
   },
   modalScrollContent: {
     width: '100%',
-    maxHeight: 400,
+    flexGrow: 0,
+    flexShrink: 1,
+    minHeight: 0,
     marginBottom: 12,
+  },
+  modalScrollContentContainer: {
+    width: '100%',
     paddingHorizontal: 4,
+    paddingBottom: 4,
   },
   inputModern: {
     width: '100%',
@@ -1947,6 +2117,95 @@ const styles = StyleSheet.create({
   },
   termsActionText: {
     fontSize: 13,
+    fontWeight: '700',
+  },
+  notificationsOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  notificationsCard: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '82%',
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 18,
+  },
+  notificationsHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 14,
+  },
+  notificationsTitleWrap: {
+    flex: 1,
+  },
+  notificationsTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  notificationsSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  notificationsCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationsRefreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  notificationsRefreshText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  notificationsList: {
+    flexGrow: 0,
+  },
+  notificationsListContent: {
+    paddingBottom: 8,
+    gap: 10,
+  },
+  notificationsStateText: {
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+    paddingVertical: 18,
+  },
+  notificationItem: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+  },
+  notificationItemTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  notificationItemMessage: {
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  notificationItemMeta: {
+    fontSize: 12,
     fontWeight: '700',
   },
   loginButton: {

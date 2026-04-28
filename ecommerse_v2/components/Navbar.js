@@ -9,7 +9,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import { FontAwesome6 as FontAwesome } from '@expo/vector-icons';
 
 const IS_WEB = Platform.OS === 'web';
 
@@ -25,6 +25,8 @@ const Navbar = ({
   themeMode,
   isMobileMenuOpen,
   onToggleMobileMenu,
+  onOpenNotifications,
+  notificationCount = 0,
 }) => {
   const screenWidth = Dimensions.get('window').width;
   const isMobile = screenWidth < 768;
@@ -202,6 +204,27 @@ const Navbar = ({
     </TouchableOpacity>
   );
 
+  const renderNotificationButton = () => (
+    <TouchableOpacity
+      onPress={onOpenNotifications}
+      style={[styles.notificationButton, getGlassStyle()]}
+      activeOpacity={0.7}
+    >
+      <FontAwesome
+        name="bell"
+        size={18}
+        color={colors.text}
+      />
+      {notificationCount > 0 && (
+        <View style={[styles.notificationBadge, { backgroundColor: colors.accent }]}>
+          <Text style={[styles.notificationBadgeText, { color: colors.mode === 'dark' ? '#0b1020' : '#ffffff' }]}>
+            {notificationCount > 9 ? '9+' : notificationCount}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+
   const renderNavTabs = () => {
     if (isMobile || !isLoggedIn) return null;
 
@@ -243,6 +266,7 @@ const Navbar = ({
     if (isLoggedIn) {
       return (
         <View style={styles.authButtonsContainer}>
+          {renderNotificationButton()}
           {renderThemeToggle()}
         </View>
       );
@@ -425,7 +449,12 @@ const Navbar = ({
           </View>
 
           <View style={styles.rightSection}>
-            {isMobile && isLoggedIn && renderBurgerMenu()}
+            {isMobile && isLoggedIn && (
+              <View style={styles.mobileLoggedInActions}>
+                {renderNotificationButton()}
+                {renderBurgerMenu()}
+              </View>
+            )}
             {isMobile && !isLoggedIn && (
               <View style={styles.mobileAuthButtons}>
                 {renderThemeToggle()}
@@ -502,7 +531,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   brandText: {
-    fontFamily: 'ElectroFont1',
+    fontFamily: 'Electrifont1',
     fontSize: 30,
     letterSpacing: 0.8,
     lineHeight: 34,
@@ -530,7 +559,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 6,
-    transition: 'all 200ms ease',
   },
   tabButtonText: {
     fontSize: 13,
@@ -541,6 +569,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     marginLeft: 'auto',
+  },
+  mobileLoggedInActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   authButtonsContainer: {
     flexDirection: 'row',
@@ -608,6 +641,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
+  },
+  notificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   burgerLine: {
     width: 20,

@@ -113,6 +113,17 @@ function normalizeUserProfile(user) {
   };
 }
 
+function normalizeNotification(notification) {
+  return {
+    id: String(notification._id || notification.id || Date.now()),
+    title: notification.title || notification.subject || "Admin Update",
+    message: notification.message || notification.body || notification.content || "",
+    createdAt: notification.createdAt || notification.sentAt || notification.date || null,
+    sentBy: notification.sentBy || notification.sender || "Admin",
+    audience: notification.audience || "all",
+  };
+}
+
 function buildUsageSummary(weekly) {
   const totalUsage = weekly.reduce((sum, item) => sum + Number(item.usage || 0), 0);
   const peakDay = weekly.reduce((max, item) => (item.usage > max.usage ? item : max), weekly[0]);
@@ -404,6 +415,35 @@ app.get("/stats/summary", async (req, res) => {
     res.json({ totalUsers, pendingPayments });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/notifications", async (req, res) => {
+  try {
+    const userId = String(req.query.userId || "").trim();
+    const notifications = await db.collection("notifications")
+      .find({
+        $or: [
+          { audience: "all" },
+          { audience: { $exists: false } },
+          ...(userId
+            ? [
+                { userId },
+                { targetUserId: userId },
+                { userIds: userId },
+              ]
+            : []),
+        ],
+      })
+      .sort({ createdAt: -1, sentAt: -1, _id: -1 })
+      .limit(30)
+      .toArray();
+
+    res.json({
+      notifications: notifications.map(normalizeNotification),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, message: "Failed to load notifications" });
   }
 });
 
