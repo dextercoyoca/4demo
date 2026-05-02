@@ -4,13 +4,14 @@
   "main": "index.js",
   "scripts": {
     "server": "node server/connect.cjs",
-    "start": "expo start",
-    "start:tunnel": "expo start --tunnel",
-    "start:clear": "expo start -c",
-    "start:tunnel:clear": "expo start -c --tunnel",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "node scripts/dev.cjs",
+    "start:app": "expo start",
+    "start:tunnel": "node scripts/dev.cjs --tunnel",
+    "start:clear": "node scripts/dev.cjs -c",
+    "start:tunnel:clear": "node scripts/dev.cjs -c --tunnel",
+    "android": "node scripts/dev.cjs --android",
+    "ios": "node scripts/dev.cjs --ios",
+    "web": "node scripts/dev.cjs --web"
   },
   "dependencies": {
     "@expo/ngrok": "^4.1.3",

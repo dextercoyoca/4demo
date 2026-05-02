@@ -82,6 +82,13 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
 
   const bill = paymentData?.currentBill;
   const paymentHistory = paymentData?.history || [];
+  const getReceiptSource = (paymentItem) =>
+    paymentItem?.receiptImage ||
+    paymentItem?.receiptUri ||
+    paymentData?.latestReceiptImage ||
+    paymentData?.latestReceipt ||
+    null;
+  const latestUploadedReceipt = getReceiptSource();
   const qrCodeUrl = bill
     ? `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(
         bill.qrData
@@ -99,10 +106,21 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 1,
+      base64: false,
     });
 
     if (!result.canceled) {
-      setReceipt(result.assets[0].uri);
+      const asset = result.assets[0];
+      const mimeType = asset.mimeType || 'image/jpeg';
+      const base64Content = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      setReceipt({
+        uri: asset.uri,
+        mimeType,
+        base64: `data:${mimeType};base64,${base64Content}`,
+      });
     }
   };
 
@@ -112,7 +130,7 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
       return;
     }
 
-    if (!receipt) {
+    if (!receipt?.base64) {
       showClientAlert('No Receipt', 'Please upload a receipt first.');
       return;
     }
@@ -121,8 +139,7 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
       setSubmitting(true);
       const response = await axios.post(
         `${apiBaseUrl}/users/${user._id}/payments/receipt`,
-        { receiptUri: receipt }
-        ,
+        { receiptImage: receipt.base64 },
         apiHeaders
       );
       if (isInvalidApiPayload(response.data) || !response.data?.payments) {
@@ -275,7 +292,7 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
           <Text style={{ color: colors.mode === 'dark' ? '#0b1020' : '#ffffff', fontWeight: 'bold' }}>Select Receipt Image</Text>
         </TouchableOpacity>
 
-        {receipt && <Image source={{ uri: receipt }} style={styles.receiptPreview} />}
+        {receipt?.uri && <Image source={{ uri: receipt.uri }} style={styles.receiptPreview} />}
 
         <TouchableOpacity
           style={[styles.submitButton, { backgroundColor: colors.darkBlue, opacity: submitting ? 0.7 : 1 }]}
@@ -291,6 +308,16 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
           <Text style={[styles.linkText, { color: colors.darkBlue }]}>Refresh payment status</Text>
         </TouchableOpacity>
       </View>
+
+      {latestUploadedReceipt && (
+        <View style={[styles.card, getGlassCardStyle()]}>
+          <Text style={[styles.title, { color: colors.text }]}>Last Submitted Receipt</Text>
+          <Text style={[styles.step, { color: colors.mutedText }]}>
+            This image is loaded from the saved payment record.
+          </Text>
+          <Image source={{ uri: latestUploadedReceipt }} style={styles.savedReceiptPreview} />
+        </View>
+      )}
 
       <View style={[styles.card, getGlassCardStyle('strong')]}>
         <TouchableOpacity
@@ -309,13 +336,25 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
 
         {showRecentPayments && paymentHistory.map((item) => (
           <View key={item.id} style={[styles.historyItem, { borderBottomColor: colors.border }]}>
-            <View>
-              <Text style={[styles.historyDate, { color: colors.text }]}>{item.date}</Text>
-              <Text style={[styles.historyStatus, { color: colors.success }]}>{item.status}</Text>
-              <Text style={[styles.historyMethod, { color: colors.mutedText }]}>{item.method}</Text>
+            <View style={styles.historyHeader}>
+              <View style={styles.historyMeta}>
+                <Text style={[styles.historyDate, { color: colors.text }]}>{item.date}</Text>
+                <Text
+                  style={[
+                    styles.historyStatus,
+                    { color: item.status === 'Completed' || item.status === 'Paid' ? colors.success : colors.accent },
+                  ]}
+                >
+                  {item.status}
+                </Text>
+                <Text style={[styles.historyMethod, { color: colors.mutedText }]}>{item.method}</Text>
+              </View>
+              <Text style={[styles.historyAmount, { color: colors.text }]}>PHP {item.amount}</Text>
             </View>
 
-            <Text style={[styles.historyAmount, { color: colors.text }]}>PHP {item.amount}</Text>
+            {getReceiptSource(item) && (
+              <Image source={{ uri: getReceiptSource(item) }} style={styles.historyReceiptPreview} />
+            )}
           </View>
         ))}
       </View>
@@ -387,13 +426,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 10,
   },
+  savedReceiptPreview: {
+    width: '100%',
+    height: 220,
+    borderRadius: 10,
+    marginTop: 8,
+  },
   historyItem: {
     paddingVertical: 10,
     borderBottomWidth: 1,
     gap: 8,
   },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  historyMeta: {
+    flex: 1,
+  },
   historyDate: { fontSize: 13, fontWeight: '600', marginBottom: 4 },
   historyStatus: { fontSize: 11, marginBottom: 2 },
   historyMethod: { fontSize: 11, marginBottom: 2 },
   historyAmount: { fontSize: 14, fontWeight: 'bold' },
+  historyReceiptPreview: {
+    width: '100%',
+    height: 180,
+    borderRadius: 10,
+    marginTop: 2,
+  },
 });

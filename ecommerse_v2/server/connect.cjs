@@ -505,8 +505,12 @@ app.get("/users/:id/payments", async (req, res) => {
 
 app.post("/users/:id/payments/receipt", async (req, res) => {
   try {
-    const { receiptUri } = req.body;
-    if (!receiptUri) return res.status(400).json({ message: "receiptUri is required" });
+    const { receiptImage, receiptUri } = req.body;
+    const normalizedReceiptImage = receiptImage || receiptUri;
+
+    if (!normalizedReceiptImage) {
+      return res.status(400).json({ message: "receiptImage is required" });
+    }
 
     const user = await db.collection("users").findOne(buildUserIdQuery(req.params.id));
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -518,12 +522,14 @@ app.post("/users/:id/payments/receipt", async (req, res) => {
       amount: payments.currentBill.amount,
       status: "Pending Verification",
       method: "Receipt Upload",
-      receiptUri,
+      receiptUri: normalizedReceiptImage,
+      receiptImage: normalizedReceiptImage,
     };
 
     const updatedPayments = {
       ...payments,
-      latestReceipt: receiptUri,
+      latestReceipt: normalizedReceiptImage,
+      latestReceiptImage: normalizedReceiptImage,
       currentBill: {
         ...payments.currentBill,
         status: "Pending Verification",
