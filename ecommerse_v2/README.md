@@ -52,6 +52,112 @@ The frontend runs at `http://localhost:3000` (or next available port). The backe
 npm run server:prod
 ```
 
+## Fixing "NOT_FOUND 404" Errors on Vercel
+
+### The Problem
+
+When you deploy to **Vercel**, you get 404 errors because:
+
+1. **Frontend deploys to Vercel** → `https://electripay.vercel.app`
+2. **Backend has nowhere to run** → Vercel is a frontend-only platform
+3. **Frontend tries `localhost:5000`** → Doesn't exist on Vercel → **404 error**
+
+### The Solution: Two-Tier Deployment Architecture
+
+```
+┌─────────────────────┐
+│ VERCEL              │
+│ (Frontend Only)     │
+│ React/Expo Web App  │
+└──────────┬──────────┘
+           │ HTTP requests
+           │ (EXPO_PUBLIC_API_URL)
+           ▼
+┌─────────────────────┐
+│ BACKEND SERVICE     │
+│ Express API         │
+│ (Heroku/Railway)    │
+└─────────────────────┘
+```
+
+### Step-by-Step Deployment
+
+#### 1. Deploy Backend First
+
+You can host the Express backend on any Node.js platform. Popular options:
+
+**Option A: Heroku (Free tier ended, but affordable)**
+
+```bash
+# Create Heroku app and deploy
+heroku create electripay-api
+git push heroku main
+# Get URL: https://electripay-api.herokuapp.com
+```
+
+**Option B: Railway.app (Recommended - easier)**
+
+```bash
+# Deploy via Railway dashboard or CLI
+# Get URL: https://electripay-api-prod.up.railway.app
+```
+
+**Option C: Replit (Quick testing)**
+
+```bash
+# Deploy Express server and share public URL
+```
+
+#### 2. Deploy Frontend to Vercel
+
+```bash
+# Set environment variable BEFORE deploying
+EXPO_PUBLIC_API_URL=https://electripay-api-prod.up.railway.app
+npm run build
+
+# Deploy to Vercel (via dashboard or CLI)
+vercel deploy --prod
+```
+
+#### 3. Configure Environment Variables on Vercel
+
+In your **Vercel Project Settings** → **Environment Variables**, add:
+
+```
+EXPO_PUBLIC_API_URL = https://your-backend-api-url.herokuapp.com
+```
+
+⚠️ **Make sure you use the correct backend URL** — this is what fixes the 404 error!
+
+#### 4. Update Backend CORS Policy
+
+In `server/config.env`, set:
+
+```
+CORS_ORIGIN=https://your-vercel-frontend-url.vercel.app
+```
+
+Then redeploy backend to apply changes.
+
+### Troubleshooting NOT_FOUND 404
+
+**Symptom**: App loads but API calls fail with 404
+
+**Diagnosis**:
+
+1. Open browser DevTools → Network tab
+2. Look at failed API requests — where are they going?
+3. Check the request URL:
+   - `http://localhost:5000/...` → ❌ Wrong! (local only)
+   - `https://your-api.herokuapp.com/...` → ✅ Correct!
+
+**Fixes**:
+
+- [ ] Is `EXPO_PUBLIC_API_URL` set in Vercel environment variables?
+- [ ] Does the backend URL actually work? Test with `curl https://your-api.herokuapp.com/health`
+- [ ] Is CORS enabled? Backend should have your Vercel URL in `CORS_ORIGIN`
+- [ ] Did you rebuild and redeploy after changing env vars?
+
 ## Environment Configuration
 
 1. **Copy `.env.example` to `.env.local` or `.env`**:

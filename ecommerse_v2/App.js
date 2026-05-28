@@ -50,6 +50,29 @@ const getApiCandidates = () => {
 
 const API_CANDIDATES = getApiCandidates();
 
+// Log API configuration for debugging
+if (typeof window !== 'undefined') {
+  console.log(
+    '%c🔌 API Configuration',
+    'color: #00ff00; font-weight: bold;',
+    {
+      EXPO_PUBLIC_API_URL: API_CONFIG.env || '(not set)',
+      candidates: API_CANDIDATES,
+      candidateCount: API_CANDIDATES.length,
+    }
+  );
+  if (API_CANDIDATES.length === 0) {
+    console.warn(
+      '%c⚠️  WARNING: No API candidates available!',
+      'color: #ff6600; font-weight: bold;'
+    );
+    console.warn(
+      'Set EXPO_PUBLIC_API_URL environment variable to your backend API URL.\n' +
+      'Example: https://electripay-api.herokuapp.com'
+    );
+  }
+}
+
 const API_HEADERS = {};
 
 const THEMES = {
@@ -236,6 +259,24 @@ export default function App() {
   const resolveApiUrl = async () => {
     setIsResolvingApi(true);
 
+    // If no candidates, log helpful error immediately
+    if (API_CANDIDATES.length === 0) {
+      console.error(
+        '%c❌ CRITICAL: No API URL configured!',
+        'color: #ff0000; font-weight: bold; font-size: 14px;'
+      );
+      console.error(
+        '%cFix: Set EXPO_PUBLIC_API_URL environment variable\n' +
+        'Local development: http://localhost:5000\n' +
+        'Production (Vercel): https://your-backend-api.herokuapp.com\n\n' +
+        'Without this, the app cannot connect to the backend!',
+        'color: #ff6600; font-size: 12px;'
+      );
+      setApiUrl('');
+      setIsResolvingApi(false);
+      return '';
+    }
+
     for (const candidate of API_CANDIDATES) {
       try {
         console.log(`🔍 Trying API candidate: ${candidate}`);
@@ -267,7 +308,26 @@ export default function App() {
       }
     }
 
-    console.error('❌ No API candidate worked');
+    console.error(
+      '%c❌ FATAL: Could not connect to any API endpoint',
+      'color: #ff0000; font-weight: bold; font-size: 14px;'
+    );
+    console.error(
+      '%cTried: ' + API_CANDIDATES.join(', ') + '\n\n' +
+      'Possible causes:\n' +
+      '1. Backend service is not running\n' +
+      '2. EXPO_PUBLIC_API_URL is incorrect\n' +
+      '3. CORS policy is blocking requests\n' +
+      '4. Backend health endpoint is not responding\n\n' +
+      'For local development:\n' +
+      '  - Start backend: npm run server\n' +
+      '  - Ensure http://localhost:5000/health returns 200\n\n' +
+      'For production (Vercel):\n' +
+      '  - Backend must be deployed separately (Heroku/Railway)\n' +
+      '  - Set EXPO_PUBLIC_API_URL in Vercel env vars\n' +
+      '  - Check backend CORS_ORIGIN includes your Vercel URL',
+      'color: #ff6600; font-size: 12px;'
+    );
     setApiUrl('');
     setIsResolvingApi(false);
     return '';
