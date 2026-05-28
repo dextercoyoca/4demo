@@ -7,7 +7,7 @@ const IS_WEB = Platform.OS === 'web';
 export default function CompanyInfo({ colors, apiBaseUrl, isActive, onScroll, isPublicWebView = false }) {
   const [stats, setStats] = useState({ totalUsers: 0 });
   const scrollRef = useRef(null);
-  const apiHeaders = { headers: { 'ngrok-skip-browser-warning': 'true' } };
+  const apiHeaders = { headers: {} };
   const getGlassStyle = (variant = 'card') => {
     if (!isPublicWebView || !IS_WEB) {
       return {};
@@ -58,7 +58,7 @@ export default function CompanyInfo({ colors, apiBaseUrl, isActive, onScroll, is
   const appDetails = {
     name: 'Electripay',
     audience: 'Electricity consumers and account holders',
-    purpose: 'A mobile billing companion for monitoring power usage and submitting payments.',
+    purpose: 'A web billing portal for monitoring power usage and submitting payments.',
   };
 
   const contactInfo = [
@@ -72,7 +72,7 @@ export default function CompanyInfo({ colors, apiBaseUrl, isActive, onScroll, is
     { title: 'Dashboard Overview', description: 'Shows account profile, bill status, and customer information in one view.' },
     { title: 'Usage Monitoring', description: 'Displays weekly and monthly consumption so users can spot patterns quickly.' },
     { title: 'Payment Tracking', description: 'Generates a payment QR, accepts receipt uploads, and keeps a payment history log.' },
-    { title: 'Mobile Access', description: 'Designed for phone-based account access using Expo and a MongoDB-backed API.' },
+    { title: 'Web Portal Access', description: 'Designed for browser-based account access using a MongoDB-backed API.' },
   ];
 
   const workflow = [
@@ -85,7 +85,7 @@ export default function CompanyInfo({ colors, apiBaseUrl, isActive, onScroll, is
   const benefits = [
     'Reduces the need to ask for bill updates manually.',
     'Keeps usage trends visible for smarter electricity decisions.',
-    'Makes payment proof submission easier on mobile devices.',
+    'Makes payment proof submission easier from any modern browser.',
     'Connects account data, usage data, and payment records in one app.',
   ];
 
@@ -105,7 +105,7 @@ export default function CompanyInfo({ colors, apiBaseUrl, isActive, onScroll, is
 
         <Text style={[styles.cardTitle, { color: colors.text }]}>What This Project Offers</Text>
         <Text style={[styles.cardText, { color: colors.text }]}>
-          Electripay is a mobile application for customers who want a simpler way to manage electricity billing.
+          Electripay is a web application for customers who want a simpler way to manage electricity billing.
           It combines account details, current bill tracking, usage monitoring, and receipt-based payment submission
           into a single interface.
         </Text>
@@ -164,7 +164,7 @@ export default function CompanyInfo({ colors, apiBaseUrl, isActive, onScroll, is
         <Text style={[styles.cardTitle, { color: colors.text }]}>Project Snapshot</Text>
         <Text style={[styles.commitmentText, { color: colors.text }]}>Audience: {appDetails.audience}</Text>
         <Text style={[styles.commitmentText, { color: colors.text }]}>Purpose: {appDetails.purpose}</Text>
-        <Text style={[styles.commitmentText, { color: colors.text }]}>Frontend: React Native with Expo</Text>
+        <Text style={[styles.commitmentText, { color: colors.text }]}>Frontend: React web app</Text>
         <Text style={[styles.commitmentText, { color: colors.text }]}>Backend: Express API with MongoDB</Text>
       </View>
 

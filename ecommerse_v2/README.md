@@ -1,192 +1,146 @@
-# ⚡ Electric Billing App
+# Electripay Web App
 
-A comprehensive React Native application for managing electricity bills with a modern, user-friendly interface featuring a light blue and yellow color scheme.
+Electripay is a browser-based electricity billing portal for customers to view account details, monitor usage, manage bills, submit payment receipts, and contact support.
 
 ## Features
 
-### 📊 Client Dashboard
-
-- View current bill amount and due date
-- Account status and connection details
-- Quick statistics for current and last month usage
-- Account number and billing period information
-
-### ⚡ Electricity Usage Tracking
-
-- Weekly usage pattern visualization with bar charts
-- Daily breakdown of electricity consumption
-- Monthly comparison and cost analysis
-- Peak and low usage insights
-- Energy efficiency tips and recommendations
-
-### 💳 Payment Management
-
-- **6 Payment Methods:**
-  - Online Banking
-  - UPI (Google Pay, PhonePe, Paytm)
-  - Credit/Debit Card
-  - Cheque Payment
-  - Digital Wallets (Amazon Pay, Apple Pay)
-  - Cash Payment at collection centers
-
-- Step-by-step payment instructions for each method
-- Complete payment history with transaction details
-- Amount due and due date tracking
-
-### ℹ️ Company Information
-
-- About Power Distribution Ltd
-- Key statistics (2.5M+ customers, 35% green energy)
-- Service coverage across 5 states and 200+ cities
-- International certifications (ISO 9001, ISO 14001, ISO 45001)
-- Customer support contact information (24/7 support)
-- Social responsibility and sustainability initiatives
-- Company strengths and core values
-
-## Design
-
-### Color Scheme
-
-- **Primary:** Light Blue (#ADD8E6)
-- **Accent:** Yellow (#FFD700)
-- **Text:** White (#FFFFFF)
-- **Background:** Dark Blue (#0B1E2E)
-
-### UI Features
-
-- Clean, modern interface
-- Tab-based navigation
-- Responsive cards and components
-- Visual charts and statistics
-- Smooth interactions and animations
+- Customer dashboard with profile, bill status, and account controls
+- Usage monitoring with weekly and monthly consumption views
+- QR-based payment flow with browser receipt upload
+- Payment history and status refresh
+- Maintenance contacts, emergency hotlines, and email reporting
+- Responsive web layout for desktop, laptop, tablet, and narrow browser screens
 
 ## Project Structure
 
-```
+```text
 ecommerse_v2/
-├── App.js                          # Main app component with navigation
-├── index.js                        # Entry point
-├── index.html                      # Landing page
-├── package.json                    # Dependencies
+├── App.js
+├── index.js
+├── package.json
+├── server/
 ├── components/
-│   ├── Dashboard.js               # Dashboard component
-│   ├── UsageSection.js            # Usage tracking component
-│   ├── PaymentSection.js          # Payment management component
-│   └── CompanyInfo.js             # Company information component
-└── assets/                         # Images and resources
+│   ├── CompanyInfo.js
+│   ├── Dashboard.js
+│   ├── MaintenanceSection.js
+│   ├── Navbar.js
+│   ├── PaymentSection.js
+│   └── UsageSection.js
+└── assets/
 ```
 
-## Installation
+## Setup
 
-### Prerequisites
+### Development
 
-- Node.js (v16 or higher)
-- npm or yarn
-- Expo CLI (optional, for web preview)
+```bash
+npm install
 
-### Setup Steps
+# Terminal 1: Start backend server
+npm run server
 
-1. **Navigate to project directory:**
+# Terminal 2: Start frontend app  
+npm start
+```
 
+The frontend runs at `http://localhost:3000` (or next available port). The backend defaults to `http://localhost:5000`.
+
+### Production
+
+```bash
+# Set NODE_ENV=production in server/config.env
+npm run server:prod
+```
+
+## Environment Configuration
+
+1. **Copy `.env.example` to `.env.local` or `.env`**:
    ```bash
-   cd c:\DEMO\ecommerse_v2
+   cp .env.example .env.local
    ```
 
-2. **Install dependencies:**
+2. **Update required variables in `.env` or `server/config.env`**:
+   - `ATLAS_URI`: MongoDB Atlas connection string
+   - `NODE_ENV`: Set to `production` for deployment
+   - `CORS_ORIGIN`: Comma-separated list of allowed domains
+   - `PORT`: Server port (default: 5000)
 
+3. **Never commit secrets**:
+   - `.gitignore` excludes `config.env` and `.env*` files
+   - Store secrets in environment variables on your deployment platform
+
+## Deployment Checklist
+
+- [x] Environment variables validated at startup
+- [x] CORS policy restricted to whitelisted domains
+- [x] Input validation and sanitization on all endpoints
+- [x] Security headers enabled (X-Content-Type-Options, X-Frame-Options, etc.)
+- [x] Error handling middleware implemented
+- [x] Graceful shutdown on SIGTERM/SIGINT
+- [x] Production build scripts configured
+
+### Before Deploying to Production
+
+1. **Set environment variables**:
    ```bash
-   npm install
+   NODE_ENV=production
+   CORS_ORIGIN=https://yourdomain.com
+   ATLAS_URI=<your-mongodb-uri>
    ```
 
-3. **Start the development server:**
-
+2. **Test production build locally**:
    ```bash
-   npm start
+   npm run server:prod
+   npm run build:prod
    ```
 
-4. **Run on different platforms:**
-   - Web: `npm run web`
-   - Android: `npm run android`
-   - iOS: `npm run ios`
+3. **Verify database connectivity**:
+   - Test `GET /health` endpoint returns `{ ok: true, dbConnected: true }`
 
-## Available Scripts
+4. **Enable HTTPS** in production (use reverse proxy like nginx)
 
-- `npm start` - Start Expo server
-- `npm run web` - Run on web browser
-- `npm run android` - Run on Android emulator/device
-- `npm run ios` - Run on iOS simulator/device
+5. **Monitor logs** for errors after deployment
 
-## Technology Stack
+## Scripts
 
-- **React Native 0.81.5** - Cross-platform mobile framework
-- **React 19.1.0** - UI library
-- **Expo 54.0.33** - React Native development platform
-- **StyleSheet API** - Native styling
+- `npm start` - Start the browser frontend
+- `npm run web` - Start the browser frontend
+- `npm run start:clear` - Start the browser frontend with cleared cache
+- `npm run server` - Start the Express backend (development)
+- `npm run server:prod` - Start the Express backend (production)
+- `npm run build` - Build frontend for production
+- `npm run build:prod` - Build frontend with NODE_ENV=production
 
-## Key Components
+## API Endpoints
 
-### Dashboard.js
+### Authentication
+- `POST /signup` - Create a new account
+- `POST /login` - Login with credentials
+- `POST /auth/forgot-password` - Reset password
 
-Displays current bill, account status, and billing information with clean card-based layout.
+### User Profile
+- `GET /users` - Get all users
+- `GET /users/:id` - Get user profile
+- `PUT /users/:id` - Update user profile
+- `POST /users/:id/change-password` - Change password
 
-### UsageSection.js
+### Usage & Payments
+- `GET /users/:id/usage` - Get usage data
+- `GET /users/:id/payments` - Get payment information
+- `POST /users/:id/payments/receipt` - Submit payment receipt
 
-Shows weekly usage patterns with visual charts, monthly comparisons, and energy-saving tips.
+### System
+- `GET /health` - Health check endpoint
+- `GET /stats/summary` - Get system statistics
 
-### PaymentSection.js
+## Stack
 
-Provides 6 payment methods with detailed instructions and payment history tracking.
-
-### CompanyInfo.js
-
-Comprehensive company information including services, certifications, and contact details.
-
-## Data Visualization
-
-- **Weekly Usage Chart** - Bar chart showing daily consumption
-- **Monthly Comparison** - Historical billing data
-- **Statistics Grid** - Key metrics and insights
-- **Status Cards** - Account and payment information
-
-## Contact & Support
-
-**Power Distribution Ltd**
-
-- 📞 Phone: +1 (800) 555-0199
-- ✉️ Email: support@powerco.com
-- 📍 Address: 123 Power Street, City, State 12345
-- ⏰ Toll Free: 1800-POWER-99
-
-## Company Values
-
-✓ 24/7 Customer Support
-✓ Transparent Billing and Fair Pricing
-✓ Regular Infrastructure Updates
-✓ Community Sustainability Programs
-✓ Digital Innovation for Customer Convenience
-✓ Fair Employment and Safety Practices
-
-## Certifications
-
-- ISO 9001 - Quality Management
-- ISO 14001 - Environmental Management
-- ISO 45001 - Occupational Health and Safety
-
-## Future Enhancements
-
-- Bill payment integration
-- Real-time notifications
-- Download bill PDF option
-- Energy consumption predictions
-- Multi-language support
-- Dark/Light theme toggle
-- Complaint tracking system
-- Profile customization
+- React 19
+- React Native Web rendering primitives
+- Expo web bundling
+- Express API
+- MongoDB
 
 ## License
 
-© 2026 Power Distribution Ltd. All rights reserved.
-
----
-
-Built with ❤️ using React Native & Expo
+Copyright 2026 Electripay. All rights reserved.

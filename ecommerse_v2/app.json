@@ -3,18 +3,9 @@
     "name": "ELECTRIPAY",
     "slug": "ecommerse_v2",
     "version": "1.0.0",
-    "icon": "./assets/Electripay-final-logo.png",
-    "splash": {
-      "image": "./assets/Electripay-final-logo-transparent.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0B1E2E"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/Electripay-final-logo.png",
-        "backgroundColor": "#ffffff"
-      },
-      "package": "com.yourname.ecommersev2"
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "userInterfaceStyle": "automatic"
   }

@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Animated, Platform } from 'react-native';
 import axios from 'axios';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import FontAwesome from '@expo/vector-icons/FontAwesome6';
 
 export default function UsageSection({ colors, apiBaseUrl, user, isActive, onScroll }) {
   const [usageData, setUsageData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAllMonths, setShowAllMonths] = useState(false);
   const scrollRef = useRef(null);
-  const apiHeaders = { headers: { 'ngrok-skip-browser-warning': 'true' } };
+  const apiHeaders = { headers: {} };
   const getGlassCardStyle = (variant = 'base') => {
     const darkMode = colors.mode === 'dark';
     const isStrong = variant === 'strong';
@@ -44,11 +44,10 @@ export default function UsageSection({ colors, apiBaseUrl, user, isActive, onScr
         if (
           typeof response.data === 'string' &&
           (response.data.startsWith('Tunnel') ||
-            response.data.includes('ngrok') ||
             response.data.startsWith('<!DOCTYPE') ||
             response.data.startsWith('<html'))
         ) {
-          throw new Error('Tunnel is inactive or API URL is stale. Start a fresh tunnel and reload the app.');
+          throw new Error('API URL is stale. Check the backend URL and reload the web app.');
         }
         setUsageData(response.data);
       } catch (error) {

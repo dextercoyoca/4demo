@@ -22,49 +22,25 @@ import CompanyInfo from './components/CompanyInfo';
 import MaintenanceSection from './components/MaintenanceSection';
 import Navbar from './components/Navbar';
 import { useFonts } from 'expo-font';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import FontAwesome from '@expo/vector-icons/FontAwesome6';
 import { showClientAlert } from './utils/showClientAlert';
 
 // Import background image for web
 const backgroundImageUri = require('./assets/electripay-bg.jpg');
 const backgroundImageLightUri = require('./assets/electripay-bckgrd.png');
 
-const IS_WEB = Platform.OS === 'web';
+const IS_WEB = true;
 
 const API_CONFIG = {
-  // Tunnel URL - update this with your actual ngrok URL or use environment variable
-  tunnel: process.env.EXPO_PUBLIC_NGROK_URL || 'https://your-ngrok-url.ngrok.io',
-  // Local development URLs
+  env: process.env.EXPO_PUBLIC_API_URL,
   local: 'http://localhost:5000',
-  machineIP: 'http://10.0.78.46:5000',  // For phones on same network
-  localAndroid: 'http://10.0.2.2:5000',
 };
 
-// API_CANDIDATES prioritized by environment and availability
 const getApiCandidates = () => {
   const candidates = [
-    // First try environment variable (most reliable for production)
-    process.env.EXPO_PUBLIC_API_URL,
+    API_CONFIG.env,
+    API_CONFIG.local,
   ];
-
-  // Prioritize based on platform
-  if (IS_WEB) {
-    // For web: try localhost first
-    candidates.push(API_CONFIG.local);
-    candidates.push(API_CONFIG.machineIP);
-  } else {
-    // For phones: try machine IP first
-    candidates.push(API_CONFIG.machineIP);
-    candidates.push(API_CONFIG.local);
-  }
-
-  // Add other options
-  candidates.push(API_CONFIG.localAndroid);
-  
-  // Add ngrok tunnel if not placeholder
-  if (API_CONFIG.tunnel && !API_CONFIG.tunnel.includes('your-ngrok-url')) {
-    candidates.push(API_CONFIG.tunnel);
-  }
 
   return candidates
     .map((url) => (typeof url === 'string' ? url.trim().replace(/\/+$/, '') : ''))
@@ -74,9 +50,7 @@ const getApiCandidates = () => {
 
 const API_CANDIDATES = getApiCandidates();
 
-const NGROK_HEADERS = {
-  'ngrok-skip-browser-warning': 'true',
-};
+const API_HEADERS = {};
 
 const THEMES = {
   dark: {
@@ -247,8 +221,8 @@ export default function App() {
     try {
       return JSON.parse(rawText);
     } catch (error) {
-      if (rawText.startsWith('Tunnel') || rawText.includes('ngrok')) {
-        throw new Error('The ngrok tunnel is inactive or showing a tunnel warning page. Start a fresh tunnel and update EXPO_PUBLIC_API_URL (or API_CONFIG.tunnel) in App.js.');
+      if (rawText.startsWith('Tunnel')) {
+        throw new Error('The API server returned a non-JSON page. Set EXPO_PUBLIC_API_URL to your web API URL and reload.');
       }
 
       if (rawText.startsWith('<!DOCTYPE') || rawText.startsWith('<html')) {
@@ -267,7 +241,7 @@ export default function App() {
         console.log(`🔍 Trying API candidate: ${candidate}`);
         const healthResponse = await fetchWithTimeout(
           `${candidate}/health`,
-          { headers: NGROK_HEADERS },
+          { headers: API_HEADERS },
           4500
         );
 
@@ -423,14 +397,14 @@ export default function App() {
     const resolvedApiUrl = apiUrl || await resolveApiUrl();
 
     if (!resolvedApiUrl) {
-      showClientAlert('Error', 'API server is not reachable yet. Start your backend server and ngrok, then reload the app.');
+      showClientAlert('Error', 'API server is not reachable yet. Start your backend server, then reload the web app.');
       return;
     }
 
     try {
       const res = await fetch(`${resolvedApiUrl}/login`, {
         method: 'POST',
-        headers: { ...NGROK_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...API_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
 
@@ -457,7 +431,7 @@ export default function App() {
     const resolvedApiUrl = apiUrl || await resolveApiUrl();
 
     if (!resolvedApiUrl) {
-      showClientAlert('Error', 'API server is not reachable yet. Start your backend server and ngrok, then reload the app.');
+      showClientAlert('Error', 'API server is not reachable yet. Start your backend server, then reload the web app.');
       return;
     }
 
@@ -487,7 +461,7 @@ export default function App() {
     try {
       const res = await fetch(`${resolvedApiUrl}/signup`, {
         method: 'POST',
-        headers: { ...NGROK_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...API_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: signupForm.name,
           email: signupForm.email,
@@ -521,7 +495,7 @@ export default function App() {
     const resolvedApiUrl = apiUrl || await resolveApiUrl();
 
     if (!resolvedApiUrl) {
-      showClientAlert('Error', 'API server is not reachable yet. Start your backend server and ngrok, then reload the app.');
+      showClientAlert('Error', 'API server is not reachable yet. Start your backend server, then reload the web app.');
       return;
     }
 
@@ -551,7 +525,7 @@ export default function App() {
     try {
       const res = await fetch(`${resolvedApiUrl}/auth/forgot-password`, {
         method: 'POST',
-        headers: { ...NGROK_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...API_HEADERS, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: normalizedForgotForm.username,
           email: normalizedForgotForm.email,

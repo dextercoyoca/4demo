@@ -9,7 +9,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import FontAwesome from '@expo/vector-icons/FontAwesome6';
 
 const IS_WEB = Platform.OS === 'web';
 

@@ -8,10 +8,8 @@ import {
   Platform,
   Animated,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import axios from 'axios';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import FontAwesome from '@expo/vector-icons/FontAwesome6';
 import { showClientAlert } from '../utils/showClientAlert';
 
 export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onScroll }) {
@@ -22,7 +20,7 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
   const [downloadingQr, setDownloadingQr] = useState(false);
   const [showRecentPayments, setShowRecentPayments] = useState(false);
   const scrollRef = useRef(null);
-  const apiHeaders = { headers: { 'ngrok-skip-browser-warning': 'true' } };
+  const apiHeaders = { headers: {} };
   const getGlassCardStyle = (variant = 'base') => {
     const darkMode = colors.mode === 'dark';
     const isStrong = variant === 'strong';
@@ -48,7 +46,7 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
 
   const isInvalidApiPayload = (payload) =>
     typeof payload === 'string' &&
-    (payload.startsWith('Tunnel') || payload.includes('ngrok') || payload.startsWith('<!DOCTYPE') || payload.startsWith('<html'));
+    (payload.startsWith('Tunnel') || payload.startsWith('<!DOCTYPE') || payload.startsWith('<html'));
 
   const fetchPayments = async () => {
     if (!apiBaseUrl || !user?._id) {
@@ -59,7 +57,7 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
     try {
       const response = await axios.get(`${apiBaseUrl}/users/${user._id}/payments`, apiHeaders);
       if (isInvalidApiPayload(response.data)) {
-        throw new Error('Tunnel is inactive or API URL is stale. Start a fresh tunnel and reload the app.');
+        throw new Error('API URL is stale. Check the backend URL and reload the web app.');
       }
       setPaymentData(response.data);
     } catch (error) {
@@ -89,21 +87,24 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
     : null;
 
   const pickReceipt = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
-      showClientAlert('Permission required', 'Allow access to gallery');
+    if (typeof document === 'undefined') {
+      showClientAlert('Unavailable', 'Receipt upload is available in the browser.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-    });
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
 
-    if (!result.canceled) {
-      setReceipt(result.assets[0].uri);
-    }
+      if (!file) {
+        return;
+      }
+
+      setReceipt(URL.createObjectURL(file));
+    };
+    input.click();
   };
 
   const submitReceipt = async () => {
@@ -126,7 +127,7 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
         apiHeaders
       );
       if (isInvalidApiPayload(response.data) || !response.data?.payments) {
-        throw new Error('Unexpected API response. Check tunnel/API base URL and try again.');
+        throw new Error('Unexpected API response. Check the API base URL and try again.');
       }
       setPaymentData(response.data.payments);
       showClientAlert('Submitted', 'Receipt sent to admin for verification.');
@@ -148,46 +149,20 @@ export default function PaymentSection({ colors, apiBaseUrl, user, isActive, onS
       return;
     }
 
-    const fileName = `electripay-qr-${Date.now()}.png`;
-    const tempFileUri = `${FileSystem.cacheDirectory}${fileName}`;
-
     try {
       setDownloadingQr(true);
-      const downloadResult = await FileSystem.downloadAsync(qrCodeUrl, tempFileUri);
+      const response = await fetch(qrCodeUrl);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
 
-      if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-
-        if (!permissions.granted) {
-          showClientAlert('Download Cancelled', 'Folder access was not granted, so the QR code was not saved.');
-          return;
-        }
-
-        const fileBase64 = await FileSystem.readAsStringAsync(downloadResult.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        const destinationUri = await FileSystem.StorageAccessFramework.createFileAsync(
-          permissions.directoryUri,
-          fileName,
-          'image/png'
-        );
-
-        await FileSystem.writeAsStringAsync(destinationUri, fileBase64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        showClientAlert('QR Saved', 'The QR code has been downloaded to the folder you selected.');
-        return;
-      }
-
-      const savedUri = `${FileSystem.documentDirectory}${fileName}`;
-      await FileSystem.copyAsync({
-        from: downloadResult.uri,
-        to: savedUri,
-      });
-
-      showClientAlert('QR Saved', `The QR code was saved inside the app files:\n${savedUri}`);
+      link.href = objectUrl;
+      link.download = `electripay-qr-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      showClientAlert('QR Saved', 'The QR code download has started.');
     } catch (error) {
       console.error('Error downloading QR code:', error);
       showClientAlert('Error', 'Failed to download the QR code');

@@ -6,21 +6,59 @@ const ngrok = require("ngrok");
 
 require("dotenv").config({ path: path.join(__dirname, "config.env") });
 
-const app = express();
+// Validate required environment variables
+const requiredEnvVars = ["ATLAS_URI", "NODE_ENV"];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+  console.error(`❌ FATAL: Missing required environment variables: ${missingEnvVars.join(", ")}`);
+  console.error(`📋 Check server/config.env or server/.env`);
+  process.exit(1);
+}
 
+const app = express();
+const PORT = process.env.PORT || 5000;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const IS_PRODUCTION = NODE_ENV === "production";
+
+// Security: Set CORS based on environment
+const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:*").split(",").map(o => o.trim());
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // In production, strictly validate origins
+    if (IS_PRODUCTION) {
+      if (corsOrigins.includes(origin) || corsOrigins.some(o => o.includes("*"))) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS policy violation"));
+    }
+    
+    // In development, allow localhost variants
+    if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+      return callback(null, true);
+    }
+    
+    callback(null, true);
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "Accept", "ngrok-skip-browser-warning"],
   credentials: true,
 }));
 
-app.use(express.json());
-
-// Health check endpoint for client connection verification
-app.get("/health", (req, res) => {
-  res.json({ ok: true, message: "Server is running" });
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
 });
+
+// Body parser with size limit
+app.use(express.json({ limit: "50mb" }));
+
 
 const uri = process.env.ATLAS_URI;
 
@@ -267,31 +305,94 @@ async function connectDB() {
 
 connectDB();
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  if (err.message === "CORS policy violation") {
+    return res.status(403).json({ error: "CORS policy violation: Origin not allowed" });
+  }
+  
+  console.error("❌ Server error:", err.message);
+  res.status(500).json({ 
+    error: IS_PRODUCTION ? "Internal server error" : err.message 
+  });
+});
+
+// Middleware: Check database connection
 app.use((req, res, next) => {
   if (!db) {
     return res.status(503).json({ error: "Database connection is not ready yet" });
   }
-
   next();
 });
+
+// Input validation helpers
+const validateEmail = (email) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+};
+
+const validatePassword = (password) => {
+  return password && password.length >= 6;
+};
+
+const validateUsername = (username) => {
+  return username && username.length >= 3 && /^[a-zA-Z0-9_-]+$/.test(username);
+};
+
+const sanitizeInput = (str) => {
+  if (typeof str !== "string") return "";
+  return str.trim().substring(0, 500);
+};
 
 app.post("/signup", async (req, res) => {
   try {
     const { username, password, name, email, contact, address } = req.body;
 
+    // Input validation
     if (!username || !password || !name || !email || !contact || !address) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
+    // Sanitize and validate inputs
+    const sanitizedUsername = sanitizeInput(username);
+    const sanitizedPassword = sanitizeInput(password);
+    const sanitizedName = sanitizeInput(name);
+    const sanitizedEmail = sanitizeInput(email).toLowerCase();
+    const sanitizedContact = sanitizeInput(contact);
+    const sanitizedAddress = sanitizeInput(address);
+
+    // Validate username
+    if (!validateUsername(sanitizedUsername)) {
+      return res.status(400).json({ message: "Username must be 3+ characters (alphanumeric, dash, underscore)" });
+    }
+
+    // Validate password
+    if (!validatePassword(sanitizedPassword)) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    // Validate email
+    if (!validateEmail(sanitizedEmail)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
+
+    // Check for duplicate username or email
     const existingUser = await db.collection("users").findOne({
-      $or: [{ username: username.trim() }, { email: email.trim().toLowerCase() }],
+      $or: [{ username: sanitizedUsername }, { email: sanitizedEmail }],
     });
 
     if (existingUser) {
       return res.status(409).json({ message: "Username or email already exists" });
     }
 
-    const newUser = await createUserDocument({ username, password, name, email, contact, address });
+    const newUser = await createUserDocument({ 
+      username: sanitizedUsername, 
+      password: sanitizedPassword, 
+      name: sanitizedName, 
+      email: sanitizedEmail, 
+      contact: sanitizedContact, 
+      address: sanitizedAddress 
+    });
     await db.collection("users").insertOne(newUser);
 
     res.status(201).json({
@@ -304,10 +405,21 @@ app.post("/signup", async (req, res) => {
 });
 
 app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-
   try {
-    const user = await db.collection("users").findOne({ username, password });
+    const { username, password } = req.body;
+
+    // Input validation
+    if (!username || !password) {
+      return res.status(400).json({ message: "Username and password are required" });
+    }
+
+    const sanitizedUsername = sanitizeInput(username);
+    const sanitizedPassword = sanitizeInput(password);
+
+    const user = await db.collection("users").findOne({ 
+      username: sanitizedUsername, 
+      password: sanitizedPassword 
+    });
 
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -315,7 +427,8 @@ app.post("/login", async (req, res) => {
 
     res.json({ message: "Login successful", user: normalizeUserProfile(user) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Login error:", err.message);
+    res.status(500).json({ error: IS_PRODUCTION ? "Login failed" : err.message });
   }
 });
 
@@ -323,17 +436,24 @@ app.post("/auth/forgot-password", async (req, res) => {
   try {
     const { username, email, contact, newPassword } = req.body;
 
+    // Input validation
     if (!username || !email || !contact || !newPassword) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const normalizedUsername = username.trim();
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedContact = contact.replace(/\D/g, "");
+    // Validate new password
+    if (!validatePassword(newPassword)) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const sanitizedUsername = sanitizeInput(username);
+    const sanitizedEmail = sanitizeInput(email).toLowerCase();
+    const sanitizedContact = sanitizeInput(contact).replace(/\D/g, "");
+    const sanitizedPassword = sanitizeInput(newPassword);
 
     const user = await db.collection("users").findOne({
-      username: { $regex: new RegExp(`^${normalizedUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
-      email: normalizedEmail,
+      username: { $regex: new RegExp(`^${sanitizedUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+      email: sanitizedEmail,
     });
 
     if (!user) {
@@ -341,18 +461,19 @@ app.post("/auth/forgot-password", async (req, res) => {
     }
 
     const storedContact = String(user.contact || user.contactNumber || "").replace(/\D/g, "");
-    if (!storedContact || storedContact !== normalizedContact) {
+    if (!storedContact || storedContact !== sanitizedContact) {
       return res.status(404).json({ message: "Account details did not match any user" });
     }
 
     await db.collection("users").updateOne(
       { _id: user._id },
-      { $set: { password: newPassword } }
+      { $set: { password: sanitizedPassword } }
     );
 
     res.json({ message: "Password reset successful" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Forgot password error:", err.message);
+    res.status(500).json({ error: IS_PRODUCTION ? "Password reset failed" : err.message });
   }
 });
 
@@ -360,9 +481,18 @@ app.post("/users/:id/change-password", async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
+    // Input validation
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: "Current and new password are required" });
     }
+
+    // Validate new password
+    if (!validatePassword(newPassword)) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const sanitizedCurrent = sanitizeInput(currentPassword);
+    const sanitizedNew = sanitizeInput(newPassword);
 
     const user = await db.collection("users").findOne(buildUserIdQuery(req.params.id));
 
@@ -370,18 +500,19 @@ app.post("/users/:id/change-password", async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (user.password !== currentPassword) {
+    if (user.password !== sanitizedCurrent) {
       return res.status(401).json({ message: "Current password is incorrect" });
     }
 
     await db.collection("users").updateOne(
       buildUserIdQuery(req.params.id),
-      { $set: { password: newPassword } }
+      { $set: { password: sanitizedNew } }
     );
 
     res.json({ message: "Password changed successfully" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Change password error:", err.message);
+    res.status(500).json({ error: IS_PRODUCTION ? "Password change failed" : err.message });
   }
 });
 
@@ -419,9 +550,19 @@ app.get("/users/:id", async (req, res) => {
 
 app.put("/users/:id", async (req, res) => {
   try {
+    // Sanitize all input fields
+    const sanitizedData = {};
+    for (const [key, value] of Object.entries(req.body)) {
+      if (typeof value === "string") {
+        sanitizedData[key] = sanitizeInput(value);
+      } else {
+        sanitizedData[key] = value;
+      }
+    }
+
     const result = await db.collection("users").updateOne(
       buildUserIdQuery(req.params.id),
-      { $set: req.body }
+      { $set: sanitizedData }
     );
 
     if (result.matchedCount === 0) {
@@ -430,7 +571,8 @@ app.put("/users/:id", async (req, res) => {
 
     res.json({ message: "Profile updated successfully" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Update user error:", err.message);
+    res.status(500).json({ error: IS_PRODUCTION ? "Update failed" : err.message });
   }
 });
 
@@ -466,7 +608,12 @@ app.get("/users/:id/payments", async (req, res) => {
 app.post("/users/:id/payments/receipt", async (req, res) => {
   try {
     const { receiptUri } = req.body;
-    if (!receiptUri) return res.status(400).json({ message: "receiptUri is required" });
+    
+    if (!receiptUri) {
+      return res.status(400).json({ message: "receiptUri is required" });
+    }
+
+    const sanitizedUri = sanitizeInput(receiptUri);
 
     const user = await db.collection("users").findOne(buildUserIdQuery(req.params.id));
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -478,12 +625,12 @@ app.post("/users/:id/payments/receipt", async (req, res) => {
       amount: payments.currentBill.amount,
       status: "Pending Verification",
       method: "Receipt Upload",
-      receiptUri,
+      receiptUri: sanitizedUri,
     };
 
     const updatedPayments = {
       ...payments,
-      latestReceipt: receiptUri,
+      latestReceipt: sanitizedUri,
       currentBill: {
         ...payments.currentBill,
         status: "Pending Verification",
@@ -498,74 +645,49 @@ app.post("/users/:id/payments/receipt", async (req, res) => {
 
     res.json({ message: "Receipt submitted successfully", payments: updatedPayments });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Receipt upload error:", err.message);
+    res.status(500).json({ error: IS_PRODUCTION ? "Receipt upload failed" : err.message });
   }
 });
 
+// Health check endpoint
 app.get("/health", (req, res) => {
-  res.json({ ok: true, dbConnected: Boolean(db) });
+  res.json({ ok: true, dbConnected: Boolean(db), environment: NODE_ENV });
 });
 
-async function startNgrokTunnel() {
-  try {
-    const ngrokToken = process.env.NGROK_AUTH_TOKEN;
-    
-    if (!ngrokToken || ngrokToken.includes('your-') || ngrokToken === 'your_token_here') {
-      console.log("\n📡 Ngrok: Auth token not configured");
-      console.log("   To enable ngrok tunnel:");
-      console.log("   1. Get token from: https://dashboard.ngrok.com/auth/your-authtoken");
-      console.log("   2. Update NGROK_AUTH_TOKEN in server/config.env\n");
-      return null;
-    }
-
-    console.log("📡 Ngrok: Attempting to create tunnel...");
-    
-    // Set auth token
-    ngrok.authtoken(ngrokToken);
-    
-    // Connect with proper configuration
-    const url = await ngrok.connect({
-      proto: 'http',
-      addr: 5000,
-      // Optional: specify region (us, eu, ap, au, sa, jp, in)
-      region: 'us',
-    });
-
-    console.log(`✅ Ngrok tunnel created: ${url}`);
-    console.log(`📱 Share this URL: ${url}`);
-    
-    return url;
-  } catch (err) {
-    console.error(`❌ Ngrok tunnel setup failed: ${err.message}`);
-    
-    // Provide specific troubleshooting based on error
-    if (err.message.includes('invalid')) {
-      console.error("   → Auth token appears invalid or expired");
-      console.error("   → Get a new token from: https://dashboard.ngrok.com/auth/your-authtoken");
-    } else if (err.message.includes('unauthorized')) {
-      console.error("   → Auth token is not authorized");
-      console.error("   → Check your ngrok account at: https://dashboard.ngrok.com/");
-    } else if (err.message.includes('ERR_NGROK_900')) {
-      console.error("   → ngrok rate limit reached or account issue");
-    }
-    
-    console.log("\n⚠️  Server will run without public ngrok tunnel");
-    console.log("   You can still access locally at: http://localhost:5000\n");
-    
-    return null;
-  }
-}
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: "Endpoint not found" });
+});
 
 async function startServer() {
-  const server = app.listen(5000, "0.0.0.0", async () => {
-    console.log("🚀 Server running on port 5000");
-    console.log("📍 Local access: http://localhost:5000\n");
-    console.log("💡 Ngrok tunnel disabled for local development");
+  const server = app.listen(PORT, "0.0.0.0", async () => {
+    console.log(`\n🚀 Server running on port ${PORT}`);
+    console.log(`📍 Local access: http://localhost:${PORT}`);
+    console.log(`🔧 Environment: ${NODE_ENV}\n`);
 
-    // ngrok tunnel disabled - uncomment if needed for remote access
-    // setTimeout(async () => {
-    //   await startNgrokTunnel();
-    // }, 500);
+    // ngrok tunnel disabled for local development
+    // Uncomment if needed for remote access:
+    // await startNgrokTunnel();
+  });
+
+  // Graceful shutdown
+  process.on("SIGTERM", () => {
+    console.log("\n📛 SIGTERM received, shutting down gracefully...");
+    server.close(() => {
+      console.log("✅ Server closed");
+      if (client) client.close();
+      process.exit(0);
+    });
+  });
+
+  process.on("SIGINT", () => {
+    console.log("\n📛 SIGINT received, shutting down gracefully...");
+    server.close(() => {
+      console.log("✅ Server closed");
+      if (client) client.close();
+      process.exit(0);
+    });
   });
 }
 

@@ -10,9 +10,8 @@ import {
   Animated,
   Platform,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
-import FontAwesome from 'react-native-vector-icons/FontAwesome6';
+import FontAwesome from '@expo/vector-icons/FontAwesome6';
 import { showClientAlert } from '../utils/showClientAlert';
 
 export default function Dashboard({ colors, apiBaseUrl, user, isActive, onScroll, onLogout, onUserRefresh }) {
@@ -81,9 +80,9 @@ export default function Dashboard({ colors, apiBaseUrl, user, isActive, onScroll
 
   const isInvalidApiPayload = (payload) =>
     typeof payload === 'string' &&
-    (payload.startsWith('Tunnel') || payload.includes('ngrok') || payload.startsWith('<!DOCTYPE') || payload.startsWith('<html'));
+    (payload.startsWith('Tunnel') || payload.startsWith('<!DOCTYPE') || payload.startsWith('<html'));
 
-  const apiHeaders = { headers: { 'ngrok-skip-browser-warning': 'true' } };
+  const apiHeaders = { headers: {} };
 
   useEffect(() => {
     if (!apiBaseUrl || !user?._id) {
@@ -95,7 +94,7 @@ export default function Dashboard({ colors, apiBaseUrl, user, isActive, onScroll
       try {
         const response = await axios.get(`${apiBaseUrl}/users/${user._id}`, apiHeaders);
         if (isInvalidApiPayload(response.data)) {
-          throw new Error('Tunnel is inactive or API URL is stale. Start a fresh tunnel and reload the app.');
+          throw new Error('API URL is stale. Check the backend URL and reload the web app.');
         }
         setProfile(mapUserToProfile(response.data));
       } catch (error) {
@@ -110,26 +109,27 @@ export default function Dashboard({ colors, apiBaseUrl, user, isActive, onScroll
   }, [apiBaseUrl, user?._id]);
 
   const pickImage = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
-      showClientAlert('Permission required', 'Allow access to gallery');
+    if (typeof document === 'undefined') {
+      showClientAlert('Unavailable', 'Profile image upload is available in the browser.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    });
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
 
-    if (!result.canceled) {
+      if (!file) {
+        return;
+      }
+
       setProfile({
         ...profile,
-        avatar: result.assets[0].uri,
+        avatar: URL.createObjectURL(file),
       });
-    }
+    };
+    input.click();
   };
 
   const handleSave = async () => {
