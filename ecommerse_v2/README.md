@@ -39,7 +39,7 @@ npm install
 # Terminal 1: Start backend server
 npm run server
 
-# Terminal 2: Start frontend app  
+# Terminal 2: Start frontend app
 npm start
 ```
 
@@ -55,6 +55,7 @@ npm run server:prod
 ## Environment Configuration
 
 1. **Copy `.env.example` to `.env.local` or `.env`**:
+
    ```bash
    cp .env.example .env.local
    ```
@@ -82,6 +83,7 @@ npm run server:prod
 ### Before Deploying to Production
 
 1. **Set environment variables**:
+
    ```bash
    NODE_ENV=production
    CORS_ORIGIN=https://yourdomain.com
@@ -89,6 +91,7 @@ npm run server:prod
    ```
 
 2. **Test production build locally**:
+
    ```bash
    npm run server:prod
    npm run build:prod
@@ -114,22 +117,26 @@ npm run server:prod
 ## API Endpoints
 
 ### Authentication
+
 - `POST /signup` - Create a new account
 - `POST /login` - Login with credentials
 - `POST /auth/forgot-password` - Reset password
 
 ### User Profile
+
 - `GET /users` - Get all users
 - `GET /users/:id` - Get user profile
 - `PUT /users/:id` - Update user profile
 - `POST /users/:id/change-password` - Change password
 
 ### Usage & Payments
+
 - `GET /users/:id/usage` - Get usage data
 - `GET /users/:id/payments` - Get payment information
 - `POST /users/:id/payments/receipt` - Submit payment receipt
 
 ### System
+
 - `GET /health` - Health check endpoint
 - `GET /stats/summary` - Get system statistics
 
