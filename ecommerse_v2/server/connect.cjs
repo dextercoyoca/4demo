@@ -304,6 +304,19 @@ async function connectDB() {
 
 connectDB();
 
+// Railway health checks should prove the HTTP server is alive, even while MongoDB is still connecting.
+app.get("/health", (req, res) => {
+  res.json({ ok: true, dbConnected: Boolean(db), environment: NODE_ENV });
+});
+
+app.get("/ready", (req, res) => {
+  if (!db) {
+    return res.status(503).json({ ok: false, dbConnected: false });
+  }
+
+  res.json({ ok: true, dbConnected: true, environment: NODE_ENV });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   if (err.message === "CORS policy violation") {
@@ -647,11 +660,6 @@ app.post("/users/:id/payments/receipt", async (req, res) => {
     console.error("Receipt upload error:", err.message);
     res.status(500).json({ error: IS_PRODUCTION ? "Receipt upload failed" : err.message });
   }
-});
-
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.json({ ok: true, dbConnected: Boolean(db), environment: NODE_ENV });
 });
 
 // 404 handler
