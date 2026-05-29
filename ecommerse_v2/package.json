@@ -8,7 +8,7 @@
     "start": "expo start --web",
     "start:clear": "expo start --web -c",
     "web": "expo start --web",
-    "build": "expo build:web",
+    "build": "echo 'Backend server - no frontend build needed'",
     "build:prod": "cross-env NODE_ENV=production expo build:web"
   },
   "dependencies": {
