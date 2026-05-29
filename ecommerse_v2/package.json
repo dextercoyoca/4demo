@@ -4,16 +4,17 @@
   "main": "index.js",
   "scripts": {
     "server": "node server/connect.cjs",
-    "server:prod": "NODE_ENV=production node server/connect.cjs",
+    "server:prod": "cross-env NODE_ENV=production node server/connect.cjs",
     "start": "expo start --web",
     "start:clear": "expo start --web -c",
     "web": "expo start --web",
     "build": "expo build:web",
-    "build:prod": "NODE_ENV=production expo build:web"
+    "build:prod": "cross-env NODE_ENV=production expo build:web"
   },
   "dependencies": {
     "axios": "^1.14.0",
     "cors": "^2.8.6",
+    "cross-env": "^7.0.3",
     "dotenv": "^17.3.1",
     "expo": "^54.0.0",
     "expo-font": "^55.0.4",
