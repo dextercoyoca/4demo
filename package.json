@@ -1,0 +1,14 @@
+{
+  "name": "electripay-deploy-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm install --prefix ecommerse_v2",
+    "start": "npm run server:prod --prefix ecommerse_v2",
+    "server:prod": "npm run server:prod --prefix ecommerse_v2",
+    "frontend:build": "npm run build --prefix ecommerse_v2"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

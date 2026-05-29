@@ -8,8 +8,8 @@
     "start": "expo start --web",
     "start:clear": "expo start --web -c",
     "web": "expo start --web",
-    "build": "echo 'Backend server - no frontend build needed'",
-    "build:prod": "cross-env NODE_ENV=production expo build:web"
+    "build": "expo export --platform web --output-dir dist",
+    "build:prod": "cross-env NODE_ENV=production expo export --platform web --output-dir dist"
   },
   "dependencies": {
     "axios": "^1.14.0",
@@ -27,6 +27,6 @@
   },
   "private": true,
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=20.19.0"
   }
 }

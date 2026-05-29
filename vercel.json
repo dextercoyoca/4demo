@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install --prefix ecommerse_v2",
+  "buildCommand": "npm run build --prefix ecommerse_v2",
+  "outputDirectory": "ecommerse_v2/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
